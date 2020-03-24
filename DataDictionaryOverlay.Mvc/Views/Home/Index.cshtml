@@ -1,0 +1,415 @@
+﻿
+@using DataDictionary.ServiceModel.Entities
+
+@{
+    ViewData["Title"] = "Grid";
+}
+<div class="col-lg-10">
+    &nbsp;
+    <div class="row">
+       
+            <table id="metadata-table" class="table table-sm table-condensed" cellspacing="0" cellpadding="0">
+                <thead>
+                    <tr>
+                        <th>@Html.Label("TableName", "TableName", new { @class = "dataTable-head-column" })</th>
+                        <th>@Html.Label("Column", "Column", new { @class = "dataTable-head-column" })</th>
+                        <th>@Html.Label("Entity", "Entity", new { @class = "dataTable-head-column" })</th>
+                        <th>@Html.Label("RecordingRate", "RecordingRate", new { @class = "dataTable-head-column" })</th>
+                        <th>@Html.Label("Actions", "Actions", new { @class = "dataTable-head-column" })</th>
+                    </tr>
+                </thead>
+            </table>
+    </div>
+   
+</div>
+<script>
+            var dt = new Date();
+            var excelfilename = (dt.getMonth() + 1) + "/" + dt.getDate() + "/" + dt.getFullYear() + "_" + dt.getHours() + ":" + dt.getMinutes() + ":" + dt.getSeconds();
+            var table = null;
+            var selected = [];
+            loadTable();
+            var collapsedGroups = {};
+            function loadTable() {
+                table = $('#metadata-table').DataTable({
+                    "language": {
+                    "processing": "<i class='fa fa-refresh fa-spin'></i>",
+                    "searchPlaceholder": "Filter Items",
+                    "search": ""
+                    },
+                    "pageLength": 100,
+                    stateSave: true,
+                    dom: 'frt',
+                    "filterOptions": {
+                        searchButton: "Search",
+                        clearSearchButton: "ClearSearch",
+                        searchContainer: "SearchContainer"
+                    },
+                    "serverSide": true,
+                    "ajax": {
+                        "url": "/Home/AjaxMetadata",
+                        "type": "POST"
+                    },
+                    "columns": [
+                        { "data": "TableName" },
+                        { "data": "Column" },
+                        { "data": "Entity" },
+                        { "data": "RecordingRate" },
+                        { "data": "Actions" }
+                    ],
+                    "aoColumnDefs": [
+                        {
+                            'targets': 1,
+                            'visible': false,
+                            'orderable': true
+                        },
+                        { "width": "30%", "targets": 0 }
+                    
+                    ],
+                    'stateSaveParams': function (settings, data) {
+                        data.columns.forEach(function (column) {
+                            delete column.visible;
+                        });
+                    },
+                });
+                //row group click
+                $('#metadata-table tbody').on('click', 'tr.group-start', function () {
+                    var name = $(this).data('name');
+                    console.log("name: " + name);
+                collapsedGroups[name] = !collapsedGroups[name];
+                table.draw(false);
+                });
+                //table.search('').columns().search('').draw();
+                table.buttons().container().appendTo('#tableActions');
+                $(document).contextmenu({
+                    delegate: ".dataTable tr",
+                    menu: [
+                        { title: "<i class='glyphicon-margin glyphicon glyphicon-remove' style='color: orange'></i> Cancel Row Update", cmd: "remove" },
+                        { title: "<i class='glyphicon-margin glyphicon glyphicon-remove-sign' style='color: orange'></i> Cancel All Rows Update", cmd: "removeall" },
+                        { title: "<i class='glyphicon-margin glyphicon glyphicon-floppy-disk glyphicon-margin' style='color: green'></i> Update Selected Rows", cmd: "update" },
+                        { title: "<i class='glyphicon-margin glyphicon glyphicon-trash glyphicon-margin' style='color: red'></i> Delete Selected Rows", cmd: "delete" },
+                        { title: "<i class='glyphicon-margin glyphicon glyphicon-plus glyphicon-margin' style='color: blue'></i> Create New Row", cmd: "add" },
+                        { title: "<i class='glyphicon-margin glyphicon glyphicon-floppy-disk glyphicon-margin' style='color: blue'></i> ...Save New Row", cmd: "addupdate" },
+                    ],
+
+                    selector: 'span.context-menu',
+                    className: 'css-title',
+                    select: function (event, ui) {
+                        var row = ui.target.closest("tr")
+                        switch (ui.cmd) {
+                            case "remove":
+                                CancelRowEdit(row);
+                                break;
+                            case "removeall":
+                                CancelAllRowsEdit(row);
+                                break;
+                            case "update":
+                                UpdateRows(row);
+                                break;
+                            case "add":
+                                ShowAddRow(row);
+                                break;
+                            case "addupdate":
+                                SaveAddRow(row);
+                                break;
+                            case "delete":
+                                DeleteSelectedRows();
+                                break;
+                        }
+                    },
+                    beforeOpen: function (event, ui) {
+                        var $menu = ui.menu,
+                            $target = ui.target,
+                            extraData = ui.extraData;
+                        ui.menu.zIndex(9999);
+                    }
+                });
+               
+                    $("body")
+                        .tooltip({
+                            selector: '[data-toggle="tooltip"]',
+                            container: 'body'
+                        });
+                };
+            function CancelRowEdit(e) {
+                if ($('#newrow').length) {
+                    $('#newrow').remove();
+                }
+                $(this).UnselectRow(e);
+            }
+            function CancelAllRowsEdit(e) {
+                $(this).UnselectAllRows($(e));
+            }
+
+            function ResetSort() {
+                localStorage.removeItem('DataTables_' + window.location.pathname);
+                table.order.neutral().draw();
+            }
+            function UpdateRows(e) {
+                var row = $(e).closest('tr');
+                var form = $('#table-form').closest('form');
+                if (form.valid()) {
+                    UpdateSelectedRows(row);
+                }
+            }
+           
+            function ShowAddRow(e) {
+            //Check for existing new row
+            if (!$('#newrow').length)
+            {
+                $(this).ShowAddRow($(e));
+            }
+        }
+    $(document).on('click','#btnAdd',
+    function(e) {
+        e.preventDefault();
+        
+            $newName = $("input[name=name]").val(),
+            $newLoot = $("#lootSplitDropdown option:selected").val();
+            BootstrapDialog.show({
+            size: BootstrapDialog.SIZE_SMALL,
+            //closable: false,
+            type: BootstrapDialog.TYPE_DEFAULT,
+            title: "Add New Item Confirmation",
+            message: "Are you sure you wish to add a new Item?",
+
+            buttons: [
+                {
+                    label: "Confirm",
+                    cssClass: 'btn-primary',
+                    action: function(dialog) {
+                        dialog.close();
+
+                        $.ajax({
+                            type: 'POST',
+                            url: '@Url.Action("AddNewRestaurant", "Home")',
+            dataType: 'json',
+            traditional: true,
+            data: addAntiForgeryToken(
+                {
+                    name: newName,
+                    cuisine: $newCuisine
+                })
+
+        }).done(function (result) {
+            if (result.success) {
+                toastr.success(result.message, "Success");
+            } else {
+                toastr.error(result.message, "Error");
+            }
+            $("#metadata-table").DataTable().destroy();
+            loadTable();
+        });
+    }
+},
+    {
+        label: "Cancel",
+        action: function (dialog) {
+            dialog.close();
+        }
+    }
+]
+});
+});
+// Click event to put row into edit mode - minus action column
+$('#metadata-table tbody').on('dblclick', 'td', function () {
+try {
+    console.log('edit click');
+    settingsEditColumns = $(this).GetSettingsColumns();
+        // check for existing edit row controls, only showedit controls if these don't already exist
+        var $row = table.row($(this).parent('tr')).nodes().to$(),
+            currentInput = $row.find('td:eq(settingsEditColumns[0]) input').length;
+        //contains is a external function in site.js
+        if (settingsEditColumns.contains(table.cell(this).index().columnVisible) && currentInput == 0) {
+            var rowId = table.row(this).data().Id;
+            var index = $.inArray(rowId, selected);
+            if (index === -1) {
+                selected.push(rowId);
+            } else {
+                selected.splice(index, 1);
+            }
+            $(this).ShowEditRow($(this).parent('tr'));
+            $(this).parent('tr').addClass('selected');
+            $.fn.DataTable.tables({ visible: true, api: true })
+                .columns.adjust()
+                .responsive.recalc();
+        }
+    }
+catch (e) {console.log('errors - ' + e);
+    }
+});
+    function UpdateSelectedRows(e) {
+        //console.log("update");
+        var selectedRestaurants = table.rows('.selected').data().toArray();
+        if (selectedRestaurants.length == 0)
+        {
+            toastr.error("Updated data required");
+            return;
+        }
+        $(this).updateEditableCells(e);
+        // case validation
+        //for (i = 0; i < selectedConfigs.length; i++) {
+        //    selectedConfigs[i].CONFIG_NAME.toUpperCase();
+        //    selectedConfigs[i].CONFIG_NAME_ABREV.toUpperCase();
+        //    selectedConfigs[i].CUSTOMER.toUpperCase();
+        //}
+        BootstrapDialog.show({
+            size: BootstrapDialog.SIZE_SMALL,
+            //closable: false,
+            type: BootstrapDialog.TYPE_DANGER,
+            title: "Save Confirmation",
+            message: "Are you sure you wish to update ALL of the selected Rows?",
+            buttons: [{
+                    label: "Confirm",
+                    cssClass: 'btn-primary',
+                    action: function (dialog) {
+                        dialog.close();
+                        //$(this).updateEditableCells(e);
+                        $.ajax({
+                            type: 'POST',
+                            url: '@Url.Action("UpdateSelectedRows", "Home")',
+                            dataType: 'json',
+                            traditional: true,
+                            data: { selectedRestaurants: JSON.stringify(selectedRestaurants) }
+
+                        }).done(function (result) {
+                            console.log('message' + result.message)
+                            if (result.success) {
+                                toastr.success(result.message, "Success");
+                                $("#restaurant-table").DataTable().destroy();
+                                selected = [];
+                                loadTable();
+                                $(this).UnselectAllRows($(e));
+                            } else {
+                                toastr.error(result.message, "Error");
+                            }
+                        });
+                    }
+                },
+                {
+                    label: "Cancel",
+                    action: function (dialog) {
+                        //Remove editing controls
+                        $.each(table.rows('.selected').indexes(), function (index, element) {
+                            var row = table.row(element).node();
+                            $(this).UnselectRow(e);
+                            //Remove class selected
+                            $(e).removeClass('selected');
+                            table.row(element).draw();
+                        });
+                        dialog.close();
+                    }
+                }
+            ]
+        });
+        };
+    function SaveAddRow(e) {
+    var test = $("input[name=cuisine]").val();
+    //console.log('input val: ' + test);
+        var $row = $(e).closest('tr'),
+            $config = $("input[name=name]"),
+            $configname = $("#cuisine option:selected");
+    if (typeof $config.val() !== "undefined") {
+        var newRow = {};
+        newRow["NAME"] = $config.val();
+        newRow["CUISINE"] = $configname.val();
+        BootstrapDialog.show({
+            size: BootstrapDialog.SIZE_SMALL,
+            //closable: false,
+            type: BootstrapDialog.TYPE_DANGER,
+            title: "Add Confirmation",
+            message: "Are you sure you wish to add a new row?",
+
+            buttons: [
+                {
+                    label: "Confirm",
+                    cssClass: 'btn-primary',
+                    action: function(dialog) {
+                        dialog.close();
+                        $.ajax({
+                            type: 'POST',
+                            url: '@Url.Action("AddNewRestaurant", "Home")',
+                            dataType: 'json',
+                            traditional: true,
+                            data: addAntiForgeryToken({ NewRow: JSON.stringify(newRow) })
+
+                        }).done(function(result) {
+                            if (result.success) {
+                                toastr.success(result.message, "Success");
+                                $("#restaurant-table").DataTable().destroy();
+                                selected = [];
+                                loadTable();
+                            } else {
+                                toastr.error(result.message, "Error");
+                            }
+                        });
+                    }
+                },
+                {
+                    label: "Cancel",
+                    action: function(dialog) {
+
+                        dialog.close();
+                    }
+                }
+            ]
+        });
+    } else {
+        toastr.error("Select Create New Row First.", "Error");
+    }
+            };
+
+            function DeleteSelectedRows() {
+                table.column(0).checkboxes.selected.length = 0;
+                var rows_selected = table.column(0).checkboxes.selected();
+                if (rows_selected.length === 0) {
+                    toastr.error("Please select at least one checkbox.", "Error");
+                    return;
+                };
+                var selected = [];
+                // Iterate over all selected checkboxes
+                $.each(rows_selected,
+                    function(index, rowId) {
+                        selected.push(rowId);
+                    });
+                BootstrapDialog.show({
+                    size: BootstrapDialog.SIZE_SMALL,
+                    type: BootstrapDialog.TYPE_DANGER,
+                    title: "Delete Confirmation",
+                    message: "Are you sure you wish to delete ALL of the selected Items?",
+                    buttons: [
+                        {
+                            label: "Confirm",
+                            cssClass: 'btn-primary',
+                            action: function(dialog) {
+                                dialog.close();
+                                $.ajax({
+                                    type: 'POST',
+                                    url: '@Url.Action("DeleteSelectedItems", "Home")',
+                                    dataType: 'json',
+                                    traditional: true,
+                                    data: addAntiForgeryToken({ selectedItems: selected })
+
+                                }).done(function(result) {
+                                    if (result.success) {
+                                        toastr.success(result.message, "Success");
+                                    } else {
+                                        toastr.error(result.message, "Error");
+                                    }
+                                    table.columns(0).checkboxes.deselectAll();
+                                    table.ajax.reload();
+                                });
+                            }
+                        },
+                        {
+                            label: "Cancel",
+                            action: function(dialog) {
+                                dialog.close();
+                            }
+                        }
+                    ]
+                });
+            }
+
+
+</script>
+
